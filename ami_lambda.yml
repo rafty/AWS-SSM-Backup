@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  AMI Generation lambda function for SSM
+
+Resources:
+
+# ---------------------------------------------------------------
+#  AWS Lambda
+# ---------------------------------------------------------------
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: lambda_es_role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - automation_lambda.amazonaws.com
+
+  LambdaPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: lambda_es_policy
+      Roles:
+        - !Ref LambdaRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - cloudwatch:*
+              - logs:*
+              - ec2:*
+            Effect: Allow
+            Resource:
+              - '*'
+
+  EventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Automation-SSM-AmiGeneration
+      Description: Automation-SSM-AmiGeneration
+      Timeout: 200
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.7
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: automation_lambda/
+      Tracing: Active
+      Layers:
+        - !Ref LambdaLayer
+
+  LambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: Common-Lambda-Layer
+      Description: Common Application Resource layer
+      ContentUri: automation_lambda/layer

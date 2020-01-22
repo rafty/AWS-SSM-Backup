@@ -1,0 +1,303 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Test vpc
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ac
+  RoleName:
+    Type: String
+    Default: ifsv
+  Environment:
+    Type: String
+    Default: dev
+  VPCCidrBlock:
+    Type: String
+    Default: 10.0.0.0/16
+  PublicSubnet1a:
+    Type: String
+    Default: 10.0.11.0/24
+  PrivateSubnet1a:
+    Type: String
+    Default: 10.0.21.0/24
+  AZ1a:
+    Type: String
+    Default: ap-northeast-1a
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    #Default: m5.large
+  WindowsLatestAmi:
+      # SSM Parameterから最新AMI IDを取得
+      Type : AWS::SSM::Parameter::Value<String>
+      Default: /aws/service/ami-windows-latest/Windows_Server-2016-Japanese-Full-Base
+      AllowedValues:
+      - /aws/service/ami-windows-latest/Windows_Server-2016-Japanese-Full-Base
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AZ1a
+      CidrBlock: !Ref PublicSubnet1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public
+
+  PublicSubnetRouteTableAssociation1:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet1
+        RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NatGateway1
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NatGateway1
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AZ1a
+      CidrBlock: !Ref PrivateSubnet1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}
+
+  PrivateSubnetRouteTableAssociation1:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PrivateSubnet1
+        RouteTableId: !Ref PrivateRouteTable
+
+
+  # --------------------------------------------
+  # Nat Gateway
+  # --------------------------------------------
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-natgw1
+
+  NatGatewayEIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  IFServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${ProjectName}-${RoleName}-${Environment}-sg
+      GroupDescription: !Sub ${ProjectName}-${RoleName}-${Environment}-sg
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${RoleName}-${Environment}
+
+  SSMEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupName: !Sub ${ProjectName}-SSM-Endpoint-${Environment}-sg
+      GroupDescription: !Sub ${ProjectName}-SSM-Endpoint-${Environment}-sg
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-SSM-Endpoint-${Environment}-sg
+
+  SSMEndpointSGIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SSMEndpointSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref VPCCidrBlock
+
+
+  SSMEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref SSMEndpointSecurityGroup
+
+  # Option: For SSM Session Manager
+  EC2MessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref SSMEndpointSecurityGroup
+
+  EC2Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref SSMEndpointSecurityGroup
+
+  SSMAgentEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref SSMEndpointSecurityGroup
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      VpcId: !Ref VPC
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+  IFServerWindowsInstance1a:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref WindowsLatestAmi
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref IFServerSecurityGroup
+      IamInstanceProfile: !Ref EC2IAMProfile
+      Tags:
+        - Key: 'Name'
+          Value: !Sub ${ProjectName}-${RoleName}-${Environment}
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Role'
+          Value: !Ref RoleName
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Patch Group'
+          Value: 'windows-patch-baseline'
+
+  EC2IAMProfile:
+    Type: AWS::IAM::InstanceProfile
+    DependsOn: EC2IAMRole
+    Properties:
+      InstanceProfileName: !Sub ${ProjectName}-${RoleName}-${Environment}-profile
+      Path: /
+      Roles:
+      - !Ref EC2IAMRole
+
+  EC2IAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ec2-iam-role-for-ssm
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - ec2.amazonaws.com
+            Action:
+            - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  BuketPolicyForSSM:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: BucketPolicyForSSM
+      Roles:
+        - !Ref EC2IAMRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub "arn:aws:s3:::aws-ssm-${AWS::Region}/*"
+              - !Sub "arn:aws:s3:::aws-windows-downloads-${AWS::Region}/*"
+              - !Sub "arn:aws:s3:::amazon-ssm-${AWS::Region}/*"
+              - !Sub "arn:aws:s3:::amazon-ssm-packages-${AWS::Region}/*"
+              - !Sub "arn:aws:s3:::${AWS::Region}-birdwatcher-prod/*"
+              - !Sub "arn:aws:s3:::aws-ssm-${AWS::Region}/*"
+              - !Sub "arn:aws:s3:::patch-baseline-snapshot-${AWS::Region}/*"

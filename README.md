@@ -20,6 +20,7 @@ Locally(terminal), run following commands.
 $ PROJECTNAME=ac
 $ ROLENAME=ifsv
 $ ENVIRONMENT=dev
+$ YOURNAME=yagita
 ```
 
 #### Create a VPC environment
@@ -38,12 +39,31 @@ $ aws cloudformation create-stack \
 
 
 #### Create Lambda Functions for SSM
+
+__Install python package.__
+```bash
+$ cd lambda/layer/python
+$ pip install -r requirements.txt -t .
+$ cd ../../..
 ```
-$ aws cloudformation create-stack \
+
+__Create a bucket to upload lambda functions.__
+```bash
+$ aws s3 mb s3://$YOURNAME-$PROJECTNAME
+```
+
+```bash
+$ aws cloudformation package \
+    --template-file ami-lambda.yml \
+    --s3-bucket $YOURNAME-$PROJECTNAME \
+    --output-template-file packaged.yml
+
+$ aws cloudformation deploy \
     --stack-name $PROJECTNAME-$ENVIRONMENT-Lambda-for-SSM-Automation \
     --region ap-northeast-1 \
-    --template-body file://ami-lambda.yml \
-    --capabilities CAPABILITY_NAMED_IAM
+    --template-file packaged.yml \
+    --capabilities CAPABILITY_NAMED_IAM \
+    --output text
 ```
 
 

@@ -117,7 +117,7 @@ Resources:
           onFailure: Abort
           inputs:
             # FunctionName: "Automation-SSM-AmiGeneration:dev"
-            FunctionName: "Automation-SSM-AmiGeneration"
+            FunctionName: "Automation-SSM-AmiGenerations"
             Payload: '{
                 "InstanceId":"{{getInstanceId.InstanceId}}",
                 "Generation":"{{Generation}}"

@@ -2,17 +2,18 @@
 AWS Systems Manager document for EC2 AMI backup
 
 
-### Instructions
+## Instructions
 
 These are the deployment steps until the full implementation is complete.
 
-#### Parameter description
+### Parameter description
 
-PROJECTNAME: The name of the system.
-ROLENAME: Classification of instances.
-ENVIRONMENT: The name of the environment.
+PROJECTNAME: The name of the system.  
+ROLENAME: Classification of instances.  
+ENVIRONMENT: The name of the environment.  
+YOURNAME: The Bucket name prefix.  
 
-#### Set variables
+### Set variables
 
 Locally(terminal), run following commands.
 
@@ -23,7 +24,7 @@ $ ENVIRONMENT=dev
 $ YOURNAME=yagita
 ```
 
-#### Create a VPC environment
+### Create a VPC environment
 
 ```bash
 $ aws cloudformation create-stack \
@@ -37,8 +38,7 @@ $ aws cloudformation create-stack \
     ParameterKey=Environment,ParameterValue=$ENVIRONMENT
 ```
 
-
-#### Create Lambda Functions for SSM
+### Create Lambda Functions for SSM
 
 __Install python package.__
 ```bash
@@ -67,7 +67,7 @@ $ aws cloudformation deploy \
 ```
 
 
-#### Create SSM Automation
+### Create SSM Automation
 
 ```
 $ aws cloudformation create-stack \

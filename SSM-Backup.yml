@@ -29,6 +29,8 @@ Resources:
             Principal:
               Service: ssm.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole
       Policies:
         - PolicyName: ec2execute
           PolicyDocument:
@@ -69,6 +71,14 @@ Resources:
             type: String
             description: (Required) Number of generations to keep image.
             default: '3'
+          Env:
+            type: String
+            description: (Required) Environment(dev/prd) for Backup.
+            default: 'dev'
+            allowedValues: [
+              "dev",
+              "prd"
+            ]
         mainSteps:
         - name: getInstanceId
           action: aws:executeAwsApi
@@ -80,7 +90,7 @@ Resources:
             - Name: "tag:Project"
               Values: [ "ac" ]
             - Name: "tag:Environment"
-              Values: [ "dev" ]
+              Values: [ "{{Env}}" ]
             - Name: "instance-state-name"
               Values: [ "running", "stopped" ]
           outputs:
@@ -100,7 +110,7 @@ Resources:
           onFailure: Abort
           inputs:
             InstanceId: "{{getInstanceId.InstanceId}}"
-            ImageName: 'backup_{{getInstanceId.InstanceId}}_{{ global:DATE_TIME }}-cm'
+            ImageName: 'backup_{{getInstanceId.InstanceId}}_{{ global:DATE_TIME }}'
             NoReboot: true
             ImageDescription: 'Created by ASM on {{ global:DATE_TIME }} UTC from {{getInstanceId.InstanceId}}'
         - name: StartInstance
@@ -116,7 +126,6 @@ Resources:
           timeoutSeconds: 300
           onFailure: Abort
           inputs:
-            # FunctionName: "Automation-SSM-AmiGeneration:dev"
             FunctionName: "Automation-SSM-AmiGenerations"
             Payload: '{
                 "InstanceId":"{{getInstanceId.InstanceId}}",

@@ -8,12 +8,14 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+# for retry
 def retry_if_client_error(exception):
     # falseを返すまでリトライする
     logger.warning('_is_retryable_exception: {}, '.format(exception))
     return not isinstance(exception, ClientError)
 
 
+# for retry
 def _is_retryable_exception(exception):
     # falseを返すまでリトライする
     logger.warning('_is_retryable_exception: {}, '.format(exception))

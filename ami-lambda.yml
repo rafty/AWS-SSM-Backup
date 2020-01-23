@@ -21,8 +21,6 @@ Resources:
             Effect: Allow
             Principal:
               Service:
-                # TODO Automationの信頼関係を確認する
-                #- automation_lambda.amazonaws.com
                 - ec2.amazonaws.com
                 - ssm.amazonaws.com
                 - lambda.amazonaws.com
@@ -54,13 +52,12 @@ Resources:
       Runtime: python3.7
       Role: !GetAtt LambdaRole.Arn
       CodeUri: automation_lambda/
-#      Tracing: Active
-#      Layers:
-#        - !Ref LambdaLayer
+      Layers:
+        - !Ref LambdaLayer
 
   LambdaLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: Common-Lambda-Layer
-      Description: Common Application Resource layer
+      LayerName: Some-Lambda-Layer
+      Description: Common Application Resource lfayer
       ContentUri: lambda/layer

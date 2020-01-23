@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 def extract_delete_snapshot_over_generation(instance_image_list, generation):
     delete_list = list()
     if len(instance_image_list) > generation:
-        delete_list = instance_image_list[0:-generation]
+        delete_list = instance_image_list[0:-generation]  # X世代より古いimageを取得する
         logger.info('delete_list: {}, '.format(delete_list))
     return delete_list
 

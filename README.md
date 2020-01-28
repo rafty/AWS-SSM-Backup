@@ -66,7 +66,7 @@ $ aws cloudformation deploy \
     --output text
 ```
 
-
+XXX
 ### Create SSM Automation
 
 ```
@@ -75,4 +75,22 @@ $ aws cloudformation create-stack \
     --region ap-northeast-1 \
     --template-body file://SSM-Backup.yml \
     --capabilities CAPABILITY_NAMED_IAM
+```
+
+
+### Create SSM MaintenanceWindow
+
+```
+$ aws cloudformation create-stack \
+    --stack-name $PROJECTNAME-$ENVIRONMENT-SSM-maintenance-window \
+    --region ap-northeast-1 \
+    --template-body file://SSM-Backup-MaintenceWindow.yml \
+    --capabilities CAPABILITY_NAMED_IAM
+
+$ aws cloudformation update-stack \
+    --stack-name $PROJECTNAME-$ENVIRONMENT-SSM-maintenance-window \
+    --region ap-northeast-1 \
+    --template-body file://SSM-Backup-MaintenceWindow.yml \
+    --capabilities CAPABILITY_NAMED_IAM
+
 ```

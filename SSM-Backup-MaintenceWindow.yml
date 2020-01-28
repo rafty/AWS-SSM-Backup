@@ -1,0 +1,186 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:  >-
+  SSM Maintenance Window - Backup AMI
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ac
+  Environment:
+    Type: String
+    Default: dev
+
+
+Resources:
+
+# ---------------------------------------------------------
+# SSM Maintenance Window
+# ---------------------------------------------------------
+  SSMMaintenanceWindowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+            - ssm.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole
+      Path: /
+
+
+  MaintenanceWindow:
+      Type: AWS::SSM::MaintenanceWindow
+      Properties:
+        Name: backup-maintenance-window
+        Description: Backup AMI
+        Cutoff: 1
+        Duration: 2
+        Schedule: cron(0/10 * * * ? *)
+        AllowUnassociatedTargets: true
+
+  MaintenanceWindowTarget:
+    Type: AWS::SSM::MaintenanceWindowTarget
+    Properties:
+      Name: database
+      Description: database instances target
+      WindowId: !Ref MaintenanceWindow
+      ResourceType: INSTANCE
+      Targets:
+        - Key: tag:Project
+          Values:
+            - !Ref ProjectName
+        - Key: tag:Environment
+          Values:
+            - !Ref Environment
+
+  BackupTask:
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties:
+      Priority: 1
+      Name: BackupAMI
+      Description: Backup instance
+      ServiceRoleArn: !GetAtt SSMMaintenanceWindowRole.Arn
+      WindowId: !Ref MaintenanceWindow
+      TaskType: AUTOMATION
+      TaskArn: !Ref BackupAmiDocument
+      Targets:
+      - Key: WindowTargetIds
+        Values:
+        - !Ref MaintenanceWindowTarget
+      MaxConcurrency: 100%
+      MaxErrors: 1
+      TaskInvocationParameters:
+        MaintenanceWindowAutomationParameters:
+          Parameters:
+            InstanceId:
+            - "{{ TARGET_ID }}"
+
+
+# ---------------------------------------------------------
+# SSM Document
+# ---------------------------------------------------------
+  BackupAmiDocument:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Automation
+      Tags:
+        - Key: 'Name'
+          Value: !Sub ${ProjectName}-${Environment}
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Environment'
+          Value: !Ref Environment
+      Content:
+        description: Backup AMI
+        schemaVersion: '0.3'
+        assumeRole: !GetAtt IAMRoleForSSM.Arn
+        parameters:
+          InstanceId:
+            type: String
+            description: (Required) The ID of the Amazon EC2 instance.
+          Generation:
+            type: String
+            description: (Required) Number of generations to keep image.
+            default: '3'
+          Env:
+            type: String
+            description: (Required) Environment(dev/prd) for Backup.
+            default: 'dev'
+            allowedValues: [
+              "dev",
+              "prd"
+            ]
+        mainSteps:
+        - name: StopInstance
+          action: aws:executeAutomation
+          onFailure: Abort
+          inputs:
+            DocumentName: AWS-StopEC2Instance
+            RuntimeParameters:
+              InstanceId: '{{ InstanceId }}'
+        - name: createImage
+          action: aws:createImage
+          maxAttempts: 3
+          onFailure: Abort
+          inputs:
+            InstanceId: '{{ InstanceId }}'
+            ImageName: 'backup_{{ InstanceId }}_{{ global:DATE_TIME }}'
+            NoReboot: true
+            ImageDescription: 'Created by ASM on {{ global:DATE_TIME }} UTC from {{ InstanceId }}'
+        - name: StartInstance
+          action: aws:executeAutomation
+          onFailure: Abort
+          inputs:
+            DocumentName: AWS-StartEC2Instance
+            RuntimeParameters:
+              InstanceId: "{{ InstanceId }}"
+        - name: AmiGeneration
+          action: aws:invokeLambdaFunction
+          maxAttempts: 3
+          timeoutSeconds: 300
+          onFailure: Abort
+          inputs:
+            FunctionName: "Automation-SSM-AmiGenerations"
+            Payload: '{
+                "InstanceId":"{{ InstanceId }}",
+                "Generation":"{{ Generation }}"
+            }'
+
+  IAMRoleForSSM:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ssm-document
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole
+      Policies:
+        - PolicyName: ec2execute
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:*'
+                Resource:
+                  - '*'
+        - PolicyName: ssmexec
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:*'
+                Resource:
+                  - '*'

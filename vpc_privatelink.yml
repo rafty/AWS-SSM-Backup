@@ -234,7 +234,28 @@ Resources:
       RouteTableIds:
         - !Ref PrivateRouteTable
 
-  IFServerWindowsInstance1a:
+  IFServerWindowsInstance1a1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref WindowsLatestAmi
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref IFServerSecurityGroup
+      IamInstanceProfile: !Ref EC2IAMProfile
+      Tags:
+        - Key: 'Name'
+          Value: !Sub ${ProjectName}-${RoleName}-${Environment}
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Role'
+          Value: !Ref RoleName
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Patch Group'
+          Value: 'windows-patch-baseline'
+
+  IFServerWindowsInstance1a2:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref WindowsLatestAmi
